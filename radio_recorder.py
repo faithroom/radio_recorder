@@ -10,11 +10,10 @@ from pathlib import Path
 import radio_downloader
 import google_drive as gdrive
 from io import StringIO
+import yt_downloader
 import threading
+import config
 
-
-RECORD_FOLDER = 'record'          # ローカル保存フォルダ
-GDRIVE_FOLDER = 'DriveSyncFiles'  # Google Driver 保存フォルダ
 
 DAYS_OF_WEEK = {
     "Mon": 'monday',
@@ -31,7 +30,7 @@ DAYS_OF_WEEK = {
 def record(title, station, duration, date_str = ''):
     try:
         if date_str == '': # 現在の放送
-            filename = f'{RECORD_FOLDER}/{title}_{datetime.now().strftime("%Y%m%d")}.mp3'
+            filename = f'{config.RECORD_FOLDER}/{title}_{datetime.now().strftime("%Y%m%d")}.mp3'
             radio_downloader.record(filename, station, duration)
 
         else: # timefree
@@ -39,7 +38,7 @@ def record(title, station, duration, date_str = ''):
             end_time_obj = start_time_obj + timedelta(seconds = duration)
             start_time = start_time_obj.strftime("%Y%m%d%H%M%S")
             end_time = end_time_obj.strftime("%Y%m%d%H%M%S")
-            filename = f'{RECORD_FOLDER}/{title}_{start_time_obj.strftime("%Y%m%d")}.mp3'
+            filename = f'{config.RECORD_FOLDER}/{title}_{start_time_obj.strftime("%Y%m%d")}.mp3'
             radio_downloader.record(filename, station, duration, start_time, end_time)
     except Exception as e:
         print('Record error: ', e)
@@ -91,9 +90,10 @@ def upload(filename):
     with upload_lock:
         print(f'Uploading {filename}...')
         for i in range(3):
+            time.sleep(60 * i)
             try:
                 g = gdrive.GoogleDriveControl()
-                gdrive_folder_id = g.search_folder(GDRIVE_FOLDER)
+                gdrive_folder_id = g.search_folder(config.GDRIVE_FOLDER)
                 print(f'GDrive folder ID:{gdrive_folder_id}')
                 url = g.upload(filename, gdrive_folder_id)
                 print('Upload done. Removing local file')
@@ -102,22 +102,24 @@ def upload(filename):
 
             except Exception as e:
                 print('Upload error: ', e)
-                print('Retry upload...')
-                time.sleep(60 * i)
+                print('Retry upload')
 
     print('', flush=True)
 
 
 def daily_task():
+    # Youtube download request
+    check_youtube_request()
+
     # 録音フォルダに upload 失敗したファイルが残っていたら upload しておく
-    for filename in Path(RECORD_FOLDER).rglob("*.mp3"):
+    for filename in Path(config.RECORD_FOLDER).rglob("*.mp3"):
         upload(filename)
 
     # Google drive に古いファイルがあったら削除
     try:
         print("Remove old files")
         g = gdrive.GoogleDriveControl()
-        gdrive_folder_id = g.search_folder(GDRIVE_FOLDER)
+        gdrive_folder_id = g.search_folder(config.GDRIVE_FOLDER)
         list = g.get_file_list(gdrive_folder_id)
 
         for file_name in list:
@@ -131,6 +133,31 @@ def daily_task():
 
     except Exception as e:
         print('Remove error', e)
+
+
+def check_youtube_request():
+    try:
+        g = gdrive.GoogleDriveControl()
+        gdrive_folder_id = g.search_folder(config.GDRIVE_FOLDER)
+        content = g.download(gdrive_folder_id, config.YT_REQUEST_FILE)
+        df = pd.read_csv(StringIO(content))
+
+    except Exception as e:
+        print('yt request file error: ', e)
+
+    if len(df) > 0:
+        try:
+            for _, row in df.iterrows():
+                title = row["title"].strip()
+                url = row["URL"].strip()
+                filename = f'{config.RECORD_FOLDER}/{title}_{datetime.now().strftime("%Y%m%d")}.mp3'
+                yt_downloader.download(filename, url)
+                upload(filename)
+
+            g.upload_content(gdrive_folder_id, config.YT_REQUEST_FILE, 'title,URL')
+
+        except Exception as e:
+            print('yt download error: ', e)
 
 
 if __name__ == '__main__':
