@@ -27,19 +27,15 @@ DAYS_OF_WEEK = {
 
 
 # 指定局・時間の録音をし、ファイルをアップロードする
-def record(title, station, duration, date_str = ''):
+def record(title, station, duration, date_str):
     try:
-        if date_str == '': # 現在の放送
-            filename = f'{config.RECORD_FOLDER}/{title}_{datetime.now().strftime("%Y%m%d")}.mp3'
-            radio_downloader.record(filename, station, duration)
-
-        else: # timefree
-            start_time_obj = datetime.strptime(date_str, "%Y%m%d%H%M")
-            end_time_obj = start_time_obj + timedelta(seconds = duration)
-            start_time = start_time_obj.strftime("%Y%m%d%H%M%S")
-            end_time = end_time_obj.strftime("%Y%m%d%H%M%S")
-            filename = f'{config.RECORD_FOLDER}/{title}_{start_time_obj.strftime("%Y%m%d")}.mp3'
-            radio_downloader.record(filename, station, duration, start_time, end_time)
+        # timefree
+        start_time_obj = datetime.strptime(date_str, "%Y%m%d%H%M")
+        end_time_obj = start_time_obj + timedelta(seconds = duration)
+        start_time = start_time_obj.strftime("%Y%m%d%H%M%S")
+        end_time = end_time_obj.strftime("%Y%m%d%H%M%S")
+        filename = f'{config.RECORD_FOLDER}/{title}_{start_time_obj.strftime("%Y%m%d")}.mp3'
+        radio_downloader.record(filename, station, duration, start_time, end_time)
     except Exception as e:
         print('Record error: ', e)
         return
@@ -48,9 +44,12 @@ def record(title, station, duration, date_str = ''):
 
 
 # 録音開始トリガ
-def start_recording_process(title, station, duration):
-    print(f"Start scheduled recording: {title} {station} for {duration} seconds.")
-    p = multiprocessing.Process(target=record, args=(title, station, duration))
+def start_recording_process(title, station, start_time, duration):
+    today_str = datetime.now().strftime("%Y%m%d")
+    date_str = f"{today_str}{start_time.replace(':','')}"
+    time.sleep(duration + 60)  # 放送終了時間まで待機 + バッファ1分
+
+    p = multiprocessing.Process(target=record, args=(title, station, duration, date_str))
     p.start()
     # p.join()
 
@@ -64,13 +63,13 @@ def schedule_recordings(schedule_file):
         title = row["title"].strip()
         day_of_week = row["day_of_week"].strip()
         start_time = row["start_time"].strip()
-        duration = row["duration"]
+        duration_min = row["duration"]
         station = row["station"].strip()
 
         schedule_func = getattr(schedule.every(), DAYS_OF_WEEK[day_of_week])
-        job = schedule_func.at(start_time).do(start_recording_process, title, station, duration * 60)
+        job = schedule_func.at(start_time).do(start_recording_process, title, station, start_time, duration_min * 60)
 
-        print(f'{title:12} {day_of_week:3} {start_time} {duration:3} {station}')
+        print(f'{title:12} {day_of_week:3} {start_time} {duration_min:3} {station}')
 
 
     # 定期的に古いファイルを削除
