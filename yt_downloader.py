@@ -12,12 +12,20 @@ def download(filename, url):
     process = subprocess.Popen(cmd.split(' '))
 
     print('downloading...')
+
+    start_time = time.time()
     while (True):
         if process.poll() is not None:
             break
         time.sleep(1)
+        if time.time() - start_time > 600:  # 10分 timeout
+            print('timeout')
+            process.terminate()
+            return False
+
     process = None
     print('done')
+    return True
 
 
 # Youtube download

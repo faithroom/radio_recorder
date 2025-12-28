@@ -10,10 +10,11 @@ from pathlib import Path
 import radio_downloader
 import google_drive as gdrive
 from io import StringIO
+from web_server import APP_ROOT
 import yt_downloader
 import threading
 import config
-
+import web_server
 
 DAYS_OF_WEEK = {
     "Mon": 'monday',
@@ -107,9 +108,6 @@ def upload(filename):
 
 
 def daily_task():
-    # Youtube download request
-    check_youtube_request()
-
     # 録音フォルダに upload 失敗したファイルが残っていたら upload しておく
     for filename in Path(config.RECORD_FOLDER).rglob("*.mp3"):
         upload(filename)
@@ -134,33 +132,22 @@ def daily_task():
         print('Remove error', e)
 
 
-def check_youtube_request():
-    try:
-        g = gdrive.GoogleDriveControl()
-        gdrive_folder_id = g.search_folder(config.GDRIVE_FOLDER)
-        content = g.download(gdrive_folder_id, config.YT_REQUEST_FILE)
-        df = pd.read_csv(StringIO(content))
+def trigger_yt_download(title, url):
+    threading.Thread(target=download_yt, args=(title, url)).start()
 
-    except Exception as e:
-        print('yt request file error: ', e)
 
-    if len(df) > 0:
-        try:
-            for _, row in df.iterrows():
-                title = row["title"].strip()
-                url = row["URL"].strip()
-                filename = f'{config.RECORD_FOLDER}/{title}_{datetime.now().strftime("%Y%m%d")}.mp3'
-                yt_downloader.download(filename, url)
-                upload(filename)
-
-            g.upload_content(gdrive_folder_id, config.YT_REQUEST_FILE, 'title,URL')
-
-        except Exception as e:
-            print('yt download error: ', e)
+def download_yt(title, url):
+    print('Download YT request:', url)
+    filename = f'{config.RECORD_FOLDER}/{title}_{datetime.now().strftime("%Y%m%d")}.mp3'
+    if yt_downloader.download(filename, url):
+        upload(filename)
 
 
 if __name__ == '__main__':
     if len(sys.argv) == 2:    # Scheduler 録音
+        # Background web server start
+        web_server.set_callback_yt_request(trigger_yt_download)
+        web_server.start_server_thread()
         schedule_recordings(sys.argv[1])
 
     elif len(sys.argv) == 5:  # Time free 単発録音
