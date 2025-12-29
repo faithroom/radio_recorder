@@ -30,10 +30,10 @@ def index():
 
 def start_server_thread():
     # Start web server in a background thread
-    web_thread = threading.Thread(target=lambda: app.run(host='127.0.0.1', port=config.WEB_PORT, debug=False), daemon=True)
+    web_thread = threading.Thread(target=lambda: app.run(host='0.0.0.0', port=config.WEB_PORT, debug=False), daemon=True)
     web_thread.start()
-    print(f'Web server started on http://127.0.0.1:{config.WEB_PORT}', flush=True)
+    print(f'Web server started on http://0.0.0.0:{config.WEB_PORT}', flush=True)
 
 
 if __name__ == '__main__':
-    app.run(host='127.0.0.1', port=config.WEB_PORT, debug=True)
+    app.run(host='0.0.0.0', port=config.WEB_PORT, debug=True)
