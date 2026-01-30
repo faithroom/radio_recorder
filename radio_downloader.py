@@ -2,6 +2,8 @@
 import time
 import base64
 import requests
+import subprocess
+import os
 import uuid
 from lxml import etree
 
@@ -66,7 +68,8 @@ def download(url, authtoken, output_file, duration):
         # print(f'Streaming URL: {streaming_url}')
 
         # 出力ファイルを開く
-        with open(output_file, 'wb') as outf:
+        temp_file = output_file + '.tmp'
+        with open(temp_file, 'wb') as outf:
             start_time = time.time()
             downloaded_segments = set()
 
@@ -108,11 +111,47 @@ def download(url, authtoken, output_file, duration):
                 time.sleep(2)
 
             print(f'\nDownload completed: {len(downloaded_segments)} segments')
-        return None  # processを返す必要がなくなった
+        
+        # ffmpegで再パッケージ
+        print('Repackaging file for compatibility...')        
+        try:
+            # 拡張子に応じて適切な形式に変換
+            # .mp3の場合はMP3に再エンコード、それ以外（.aac, .m4aなど）はコピー
+            if output_file.lower().endswith('.mp3'):
+                # MP3形式に変換（再エンコードが必要）
+                cmd = [
+                    'ffmpeg',
+                    '-i', temp_file,
+                    '-c:a', 'libmp3lame',  # MP3エンコーダー
+                    '-b:a', '128k',  # ビットレート
+                    '-y',
+                    '-loglevel', 'error',
+                    output_file
+                ]
+            else:
+                cmd = [
+                    'ffmpeg',
+                    '-i', temp_file,
+                    '-c', 'copy',
+                    '-y',
+                    '-loglevel', 'error',
+                    output_file
+                ]
+            
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            os.remove(temp_file)
+            if result.returncode == 0:
+                return True
+            print(f'Warning: Repackaging failed: {result.stderr}')
+
+        except Exception as e:
+            print(f'Warning: Repackaging error: {e}')
+            os.remove(temp_file)
 
     except Exception as e:
         print(f'Download error: {e}')
         raise
+    return False
 
 
 def get_streaming_url_v3(station, authtoken):
