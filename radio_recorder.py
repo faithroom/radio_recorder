@@ -30,13 +30,17 @@ DAYS_OF_WEEK = {
 # 指定局・時間の録音をし、ファイルをアップロードする
 def record(title, station, duration, date_str):
     try:
-        # timefree
-        start_time_obj = datetime.strptime(date_str, "%Y%m%d%H%M")
-        end_time_obj = start_time_obj + timedelta(seconds = duration)
-        start_time = start_time_obj.strftime("%Y%m%d%H%M%S")
-        end_time = end_time_obj.strftime("%Y%m%d%H%M%S")
-        filename = f'{config.RECORD_FOLDER}/{title}_{start_time_obj.strftime("%Y%m%d")}.mp3'
-        radio_downloader.record(filename, station, duration, start_time, end_time)
+        # Realtime streaming
+        filename = f'{config.RECORD_FOLDER}/{title}_{datetime.now().strftime("%Y%m%d")}.mp3'
+        radio_downloader.record(filename, station, duration)
+
+        # # timefree
+        # start_time_obj = datetime.strptime(date_str, "%Y%m%d%H%M")
+        # end_time_obj = start_time_obj + timedelta(seconds = duration)
+        # start_time = start_time_obj.strftime("%Y%m%d%H%M%S")
+        # end_time = end_time_obj.strftime("%Y%m%d%H%M%S")
+        # filename = f'{config.RECORD_FOLDER}/{title}_{start_time_obj.strftime("%Y%m%d")}.mp3'
+        # radio_downloader.record(filename, station, duration, start_time, end_time)
     except Exception as e:
         print('Record error: ', e)
         return
@@ -48,7 +52,8 @@ def record(title, station, duration, date_str):
 def start_recording_process(title, station, start_time, duration):
     today_str = datetime.now().strftime("%Y%m%d")
     date_str = f"{today_str}{start_time.replace(':','')}"
-    time.sleep(duration + 60)  # 放送終了時間まで待機 + バッファ1分
+    # time.sleep(duration + 60)  # 放送終了時間まで待機 + バッファ1分
+    print(f"Start scheduled recording: {title} {station} for {duration} seconds.")
 
     p = multiprocessing.Process(target=record, args=(title, station, duration, date_str))
     p.start()
